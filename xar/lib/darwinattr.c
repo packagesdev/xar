@@ -664,9 +664,9 @@ static int32_t underbar_extract(xar_t x, xar_file_t f, const char* file, void *c
 static int32_t stragglers_archive(xar_t x, xar_file_t f, const char* file, void *context) {
 #ifdef HAVE_GETATTRLIST
 	struct fits {
-    		uint32_t     length;
+    	uint32_t     length;
 		struct timespec ts;
-	};
+	} __attribute__((packed));
 	struct fits fts;
 	struct attrlist attrs;
 	int ret;
@@ -685,10 +685,15 @@ static int32_t stragglers_archive(xar_t x, xar_file_t f, const char* file, void 
 		if( tmpp ) {
 			char tmpc[128];
 			struct tm tm;
+			__darwin_time_t tvsec;
+			
 			xar_prop_setkey(tmpp, "FinderCreateTime");
 			xar_prop_setvalue(tmpp, NULL);
 			memset(tmpc, 0, sizeof(tmpc));
-			gmtime_r(&fts.ts.tv_sec, &tm);
+			
+			tvsec=fts.ts.tv_sec;
+			gmtime_r(&tvsec, &tm);
+			
 			strftime(tmpc, sizeof(tmpc), "%FT%T", &tm);
 			xar_prop_pset(f, tmpp, "time", tmpc);
 			memset(tmpc, 0, sizeof(tmpc));
