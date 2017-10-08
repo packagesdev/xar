@@ -395,6 +395,14 @@ static int extract(const char *filename, int arglen, char *args[]) {
 		struct lnode *i;
 
 		char *path = xar_get_path(f);
+		
+		// This includes a null check
+		if (!xar_path_issane(path)) {
+			if (Verbose)
+				printf("Warning, not extracting file \"%s\" because it's path is invalid.\n", path);
+			free(path);
+			continue;
+		}
 
 		if( args[0] ) {
 			for(i = extract_files; i != NULL; i = i->next) {
@@ -422,13 +430,6 @@ static int extract(const char *filename, int arglen, char *args[]) {
 			continue;
 		}
 		
-		if (!xar_path_issane(path)) {
-			if (Verbose)
-				printf("Warning, not extracting file \"%s\" because it's path is invalid.\n", path);
-			free(path);
-			continue;
-		}
-		
 		if( matched ) {
 			struct stat sb;
 			if( NoOverwrite && (lstat(path, &sb) == 0) ) {
@@ -436,7 +437,7 @@ static int extract(const char *filename, int arglen, char *args[]) {
 			} else {
 				const char *prop = NULL;
 				int deferred = 0;
-				if( xar_prop_get(f, "type", &prop) == 0 ) {
+				if( xar_prop_get(f, "type", &prop) == 0 && prop != NULL ) {
 					if( strcmp(prop, "directory") == 0 ) {
 						struct lnode *tmpl = calloc(sizeof(struct lnode),1);
 						tmpl->str = (char *)f;
@@ -648,7 +649,7 @@ static int dump_header(const char *filename) {
 #else
 	case XAR_CKSUM_MD5: printf("(unsupported (MD5))\n");
             break;
-#endif XAR_SUPPORT_MD5
+#endif // XAR_SUPPORT_MD5
 	default: printf("(unknown)\n");
 	         break;
 	};

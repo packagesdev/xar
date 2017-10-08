@@ -63,6 +63,7 @@
 #include "script.h"
 #include "macho.h"
 #include "util.h"
+#include "data.h"
 
 #if !defined(LLONG_MAX) && defined(LONG_LONG_MAX)
 #define LLONG_MAX LONG_LONG_MAX
@@ -183,6 +184,9 @@ off_t xar_io_get_file_offset(xar_t x, xar_file_t f, xar_prop_t p) {
 	tmpp = xar_prop_pget(p, "offset");
 	if( tmpp ) {
 		opt = xar_prop_getvalue(tmpp);
+		if (opt == NULL){
+		    return -1;
+		}
 		return strtoll(opt, NULL, 0);
 	} else {
 		return -1;
@@ -438,7 +442,7 @@ int32_t xar_attrcopy_from_heap(xar_t x, xar_file_t f, xar_prop_t p, write_callba
 	void	*modulecontext[modulecount];
 	int r, i;
 	size_t bsize, def_bsize;
-	int64_t fsize, inc = 0, seekoff;
+	int64_t fsize, inc = 0, seekoff, readsofar = 0;
 	void *inbuf;
 	const char *opt;
 	xar_prop_t tmpp;
@@ -484,11 +488,11 @@ int32_t xar_attrcopy_from_heap(xar_t x, xar_file_t f, xar_prop_t p, write_callba
 			free(inbuf);
 			return -1;
 		}
-
+		
 		XAR(x)->heap_offset += r;
 		inc += r;
 		bsize = r;
-
+		
 		/* filter the data through the in modules */
 		for( i = 0; i < modulecount; i++) {
 			if( xar_datamods[i].fh_in ) {
@@ -518,6 +522,11 @@ int32_t xar_attrcopy_from_heap(xar_t x, xar_file_t f, xar_prop_t p, write_callba
 
 			wcb(x, f, inbuf, bsize, context);
 		}
+		
+		readsofar += bsize;
+		
+		if (DATA_CONTEXT(context)->progress)
+			DATA_CONTEXT(context)->progress(x, f, readsofar);
 		
 		bsize = def_bsize;
 	}
