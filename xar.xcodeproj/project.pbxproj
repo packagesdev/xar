@@ -120,9 +120,6 @@
 		B41FC10809F6BE9100006FAE /* subdoc.c in Sources */ = {isa = PBXBuildFile; fileRef = B41FC09509F6BC2C00006FAE /* subdoc.c */; };
 		B41FC10909F6BE9100006FAE /* util.c in Sources */ = {isa = PBXBuildFile; fileRef = B41FC09709F6BC2C00006FAE /* util.c */; };
 		B41FC10A09F6BE9100006FAE /* zxar.c in Sources */ = {isa = PBXBuildFile; fileRef = B41FC09909F6BC2C00006FAE /* zxar.c */; };
-		B41FC10B09F6BE9B00006FAE /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = B41FC0C409F6BC7A00006FAE /* libz.dylib */; };
-		B41FC10C09F6BE9B00006FAE /* libbz2.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = B41FC0C509F6BC7A00006FAE /* libbz2.dylib */; };
-		B41FC10E09F6BE9B00006FAE /* libxml2.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = B41FC0C709F6BC7A00006FAE /* libxml2.dylib */; };
 		B41FC12A09F6BF3700006FAE /* xar.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = B41FC12509F6BF3300006FAE /* xar.plist */; };
 		B41FC12B09F6BF3C00006FAE /* xar.txt in CopyFiles */ = {isa = PBXBuildFile; fileRef = B41FC12609F6BF3300006FAE /* xar.txt */; };
 		B476FACD0A49E68600BCD61F /* signature.c in Sources */ = {isa = PBXBuildFile; fileRef = B476FACC0A49E68600BCD61F /* signature.c */; };
@@ -374,9 +371,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B41FC10B09F6BE9B00006FAE /* libz.dylib in Frameworks */,
-				B41FC10C09F6BE9B00006FAE /* libbz2.dylib in Frameworks */,
-				B41FC10E09F6BE9B00006FAE /* libxml2.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
