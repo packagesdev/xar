@@ -192,8 +192,13 @@ unsigned char* xar_from_base64(const unsigned char* input, size_t inputLength, s
 	// N.B.: This is a conservative estimate of space needed.  It is NOT
 	// an exact value -- the exact length of the decoded data will be
 	// calculated during the decode operation.
-    output = malloc(3 * (inputLength / 4 + 1));
+	
+	size_t estimatedSize=3 * (inputLength / 4 + 1);
+	
+	output = malloc(estimatedSize);
     if (output == NULL) return NULL;
+	
+	memset(output,0,estimatedSize);
 
     err = raw_base64_decode(input, output, inputLength, outputLength);
 
