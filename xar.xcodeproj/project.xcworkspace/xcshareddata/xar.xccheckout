@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>25ADCBC6-1DB6-49D5-844C-3A27FF95ED61</string>
+	<key>IDESourceControlProjectName</key>
+	<string>xar</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>59B5C0F6B858A7F8E05B2411E2CC1623B715DBBA</key>
+		<string>https://github.com/packagesdev/xar.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>xar.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>59B5C0F6B858A7F8E05B2411E2CC1623B715DBBA</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/packagesdev/xar.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>59B5C0F6B858A7F8E05B2411E2CC1623B715DBBA</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>59B5C0F6B858A7F8E05B2411E2CC1623B715DBBA</string>
+			<key>IDESourceControlWCCName</key>
+			<string>xar</string>
+		</dict>
+	</array>
+</dict>
+</plist>
