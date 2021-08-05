@@ -676,7 +676,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# shell script goes here\n\nif [ ! -e \"$BUILT_PRODUCTS_DIR\" ]; then\n\tmkdir -p \"$BUILT_PRODUCTS_DIR\"\nfi\n\ncd \"$BUILT_PRODUCTS_DIR\"\n\n\"$SRCROOT\"/xar/configure\n\n\nexit 0";
+			shellScript = "# shell script goes here\n\nif [ ! -e \"$BUILT_PRODUCTS_DIR\" ]; then\n\tmkdir -p \"$BUILT_PRODUCTS_DIR\"\nfi\n\ncd \"$BUILT_PRODUCTS_DIR\"\n\n\"$SRCROOT\"/xar/configure\n\n\nexit 0\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -839,11 +839,13 @@
 		B41FC04309F6B74500006FAE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DYLIB_COMPATIBILITY_VERSION = 1.0;
 				DYLIB_CURRENT_VERSION = 1.3;
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				"MACOSX_DEPLOYMENT_TARGET[arch=arm64]" = 11.0;
 				SDKROOT = macosx;
 				STRIP_STYLE = debugging;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -853,11 +855,13 @@
 		B41FC04409F6B74500006FAE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				COPY_PHASE_STRIP = YES;
 				CURRENT_PROJECT_VERSION = "$(RC_ProjectSourceVersion)";
 				DYLIB_COMPATIBILITY_VERSION = 1.0;
 				DYLIB_CURRENT_VERSION = 1.3;
+				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				"MACOSX_DEPLOYMENT_TARGET[arch=arm64]" = 11.0;
 				SDKROOT = macosx;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -867,7 +871,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
@@ -880,7 +884,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = YES;
 				GCC_ENABLE_FIX_AND_CONTINUE = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
@@ -970,11 +974,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_ENABLE_FIX_AND_CONTINUE = YES;
-				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
@@ -982,10 +985,8 @@
 					"$(TARGET_BUILD_DIR)/include",
 				);
 				INSTALL_PATH = /usr/local/lib;
-				PREBINDING = NO;
 				PRODUCT_NAME = xar;
 				VERSIONING_SYSTEM = "apple-generic";
-				ZERO_LINK = YES;
 			};
 			name = Debug;
 		};
@@ -993,20 +994,17 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = YES;
 				GCC_ENABLE_FIX_AND_CONTINUE = NO;
-				GCC_MODEL_TUNING = G5;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/include/libxml2,
 					"$(TARGET_BUILD_DIR)/include",
 				);
 				INSTALL_PATH = /usr/local/lib;
-				PREBINDING = NO;
 				PRODUCT_NAME = xar;
 				VERSIONING_SYSTEM = "apple-generic";
-				ZERO_LINK = NO;
 			};
 			name = Release;
 		};
