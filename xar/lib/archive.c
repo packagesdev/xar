@@ -90,6 +90,7 @@
 static int32_t xar_unserialize(xar_t x);
 void xar_serialize(xar_t x, const char *file);
 
+
 #ifdef HAVE_LIBPTHREAD
 static pthread_mutex_t xar_new_mutex = PTHREAD_MUTEX_INITIALIZER;
 #endif // HAVE_LIBPTHREAD
@@ -157,9 +158,10 @@ static int32_t xar_parse_header(xar_t x) {
 	 * if the recorded header length is greater than the 
 	 * expected header length.
 	 */
-	r = xar_read_fd(XAR(x)->fd, (char *)&XAR(x)->header.magic+off, sizeof(XAR(x)->header.magic)-off);
-	if ( r == -1 )
-		return r;
+	size_t size_to_read = sizeof(XAR(x)->header.magic)-off;
+	r = xar_read_fd(XAR(x)->fd, (char *)&XAR(x)->header.magic+off, size_to_read);
+	if ( r == -1 || size_to_read != r)
+		return -1;
 
 	/* Verify the header.  If the header doesn't match, exit without
 	 * attempting to read any more.
@@ -170,8 +172,9 @@ static int32_t xar_parse_header(xar_t x) {
 		return -1;
 	}
 
-	r = xar_read_fd(XAR(x)->fd, (char *)&XAR(x)->header.size+off, sizeof(XAR(x)->header.size)-off);
-	if ( r == -1 )
+	size_to_read = sizeof(XAR(x)->header.size)-off;
+	r = xar_read_fd(XAR(x)->fd, (char *)&XAR(x)->header.size+off, size_to_read);
+	if ( r == -1 || size_to_read != r )
 		return r;
 
 	XAR(x)->header.size = ntohs(XAR(x)->header.size);
@@ -182,8 +185,9 @@ static int32_t xar_parse_header(xar_t x) {
 		sz2read = XAR(x)->header.size;
 
 	off = sizeof(XAR(x)->header.magic) + sizeof(XAR(x)->header.size);
-	r = xar_read_fd(XAR(x)->fd, ((char *)&XAR(x)->header)+off, sizeof(xar_header_t)-off);
-	if ( r == -1 )
+	size_to_read = sizeof(xar_header_t)-off;
+	r = xar_read_fd(XAR(x)->fd, ((char *)&XAR(x)->header)+off, size_to_read);
+	if ( r == -1 || size_to_read != r)
 		return r;
 
 	XAR(x)->header.version = ntohs(XAR(x)->header.version);
@@ -201,14 +205,22 @@ static int32_t xar_parse_header(xar_t x) {
 	return 0;
 }
 
+xar_t xar_open(const char *file, int32_t flags)
+{
+	return xar_open_digest_verify(file, flags, NULL, 0);
+}
+
 /* xar_open
  * file: filename to open
  * flags: flags on how to open the file.  0 for readonly, !0 for read/write
+ * expected_toc_digest: Requires that the xar being opened matches the digest specified.
+ * expected_toc_digest_len: The length of the expected_toc_digest.
  * Returns: allocated and initialized xar structure with an open
  * file descriptor to the target xar file.  If the xarchive is opened
  * for writing, the file is created, and a heap file is opened.
  */
-xar_t xar_open(const char *file, int32_t flags) {
+xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len)
+{
 	xar_t ret;
 
 	ret = xar_new();
@@ -284,6 +296,9 @@ xar_t xar_open(const char *file, int32_t flags) {
 
 		switch(XAR(ret)->header.cksum_alg) {
 		case XAR_CKSUM_NONE:
+			fprintf(stderr, "Archive uses no hashing algorithm, aborting\n");
+			xar_close(ret);
+			return NULL;
 			break;
 		case XAR_CKSUM_SHA1:
 			XAR(ret)->toc_hash_ctx = xar_hash_new("sha1", (void *)ret);
@@ -308,6 +323,7 @@ xar_t xar_open(const char *file, int32_t flags) {
 			break;
 		};
 
+		// deserialize the TOC
 		if( xar_unserialize(ret) != 0 ) {
 			xar_close(ret);
 			return NULL;
@@ -324,6 +340,7 @@ xar_t xar_open(const char *file, int32_t flags) {
 		const char* cksum_style = xar_attr_get(XAR_FILE(ret), "checksum", "style");
 		switch(XAR(ret)->header.cksum_alg) {
 			case XAR_CKSUM_NONE:
+				// Although we no longer support none, we are leaving this here to detect mismatches
 				cksum_match = (cksum_style == NULL || strcmp(cksum_style, XAR_OPT_VAL_NONE) == 0);
 				break;
 			case XAR_CKSUM_SHA1:
@@ -412,6 +429,12 @@ xar_t xar_open(const char *file, int32_t flags) {
 			return NULL;
 		}
 		
+		// Store our toc hash upon archive open, so callers can determine if it
+		// has changed or been tampered with after archive open
+		XAR(ret)->toc_hash = malloc(tlen);
+		memcpy(XAR(ret)->toc_hash, toccksum, tlen);
+		XAR(ret)->toc_hash_size = tlen;
+		
 		void *cval = calloc(1, tlen);
 		if( ! cval ) {
 			free(toccksum);
@@ -419,7 +442,14 @@ xar_t xar_open(const char *file, int32_t flags) {
 			return NULL;
 		}
 		
-		xar_read_fd(XAR(ret)->fd, cval, tlen);
+		ssize_t r = xar_read_fd(XAR(ret)->fd, cval, tlen);
+		
+		if (r < 0 || r != tlen) {
+			free(toccksum);
+			xar_close(ret);
+			return NULL;
+		}
+		
 		XAR(ret)->heap_offset += tlen;
 		if( memcmp(cval, toccksum, tlen) != 0 ) {
 			fprintf(stderr, "Checksums do not match!\n");
@@ -432,8 +462,63 @@ xar_t xar_open(const char *file, int32_t flags) {
 		free(toccksum);
 		free(cval);
 	}
+	
+	if ( expected_toc_digest )
+	{
+		if ( ! XAR(ret)->toc_hash_ctx )
+		{
+			fprintf(stderr, "xar_open_digest_verify: xar lacks a toc_hash_ctx.\n");
+			xar_close(ret);
+			return NULL;
+		}
+			
+		if ( XAR(ret)->toc_hash_size != expected_toc_digest_len )
+		{
+			fprintf(stderr, "xar_open_digest_verify: toc digest length does not match the expected digest length.\n");
+			xar_close(ret);
+			return NULL;
+		}
+		
+		if ( memcmp(XAR(ret)->toc_hash, expected_toc_digest, expected_toc_digest_len) != 0 )
+		{
+			fprintf(stderr, "xar_open_digest_verify: toc digest does not match the expected.\n");
+			xar_close(ret);
+			return NULL;
+		}
+	}
 
 	return ret;
+}
+
+void* xar_get_toc_checksum(xar_t x, size_t* buffer_size)
+{
+	// Required in, missing.
+	if (!buffer_size)
+		return NULL;
+	
+	// Sanity set values
+	void* result = NULL;
+	*buffer_size = 0;
+	
+	// If we have a hash, return it.
+	if (XAR(x)->toc_hash) {
+		
+		*buffer_size = XAR(x)->toc_hash_size;
+		result = calloc(*buffer_size, 1);
+		
+		// Malloc fail?
+		if (!result)
+			return NULL;
+		
+		memcpy(result, XAR(x)->toc_hash, XAR(x)->toc_hash_size);
+	}
+	
+	return result;
+}
+
+int32_t xar_get_toc_checksum_type(xar_t x)
+{
+	return XAR(x)->header.cksum_alg;
 }
 
 /* xar_close
@@ -452,7 +537,7 @@ int xar_close(xar_t x) {
 		char *tmpser;
 		void *rbuf, *wbuf = NULL;
 		int fd, r, off, wbytes, rbytes;
-		long rsize, wsize;
+		size_t rsize, wsize;
 		z_stream zs;
 		uint64_t ungztoc, gztoc;
 		int tocfd;
@@ -519,7 +604,7 @@ int xar_close(xar_t x) {
 		/* read the toc from the tmp file, compress it, and write it
 	 	* out to the archive.
 	 	*/
-		rsize = wsize = 4096;
+		rsize = wsize = xar_optimal_io_size_at_path(XAR(x)->dirname);
 		const char * opt = xar_opt_get(x, XAR_OPT_RSIZE);
 		if ( opt ) {
 		  rsize = strtol(opt, NULL, 0);
@@ -560,7 +645,12 @@ int xar_close(xar_t x) {
 	
 			off = 0;
 			while( zs.avail_in != 0 ) {
-				wsize *= 2;
+				size_t newlen = wsize * 2;
+				if (newlen > wsize)
+					wsize = newlen;
+				else
+					abort();	/* Someone has somehow malloced over 2^64 bits of ram. */
+				
 				wbuf = realloc(wbuf, wsize);
 
 				zs.next_out = ((unsigned char *)wbuf) + off;
@@ -744,9 +834,15 @@ CLOSE_BAIL:
 	free((char *)XAR(x)->filename);
 	free((char *)XAR(x)->dirname);
 	free(XAR(x)->readbuf);
+	free(XAR(x)->toc_hash);
 	free((void *)x);
 
 	return retval;
+}
+
+xar_header_t xar_header_get(xar_t x)
+{
+	return XAR(x)->header;
 }
 
 /* xar_opt_get
@@ -1403,7 +1499,11 @@ int32_t xar_extract(xar_t x, xar_file_t f) {
 		free(dname);
 		free(tmp1);
 		XAR_FILE(f)->parent_extracted++;
-		xar_extract(x, tmpf);
+		int32_t result = xar_extract(x, tmpf);
+		
+		if (result < 0)
+			return result;
+			
 	}
 	
 	return xar_extract_tofile(x, f, XAR_FILE(f)->fspath);
@@ -1439,11 +1539,16 @@ static int toc_read_callback(void *context, char *buffer, int len) {
 
 	if ( ((!XAR(x)->offset) || (XAR(x)->offset == XAR(x)->readbuf_len)) && (XAR(x)->toc_count != XAR(x)->header.toc_length_compressed) ) {
 		XAR(x)->offset = 0;
-		if( (XAR(x)->readbuf_len - off) + XAR(x)->toc_count > XAR(x)->header.toc_length_compressed )
-			ret = xar_read_fd(XAR(x)->fd, XAR(x)->readbuf, XAR(x)->header.toc_length_compressed - XAR(x)->toc_count);
-		else
-			ret = read(XAR(x)->fd, XAR(x)->readbuf, XAR(x)->readbuf_len);
-		if ( ret == -1 )
+		size_t read_size = 0;
+		if( (XAR(x)->readbuf_len - off) + XAR(x)->toc_count > XAR(x)->header.toc_length_compressed ) {
+			read_size = XAR(x)->header.toc_length_compressed - XAR(x)->toc_count;
+			ret = xar_read_fd(XAR(x)->fd, XAR(x)->readbuf, read_size);
+		}
+		else {
+			read_size = XAR(x)->readbuf_len;
+			ret = read(XAR(x)->fd, XAR(x)->readbuf, read_size);
+		}
+		if ( ret == -1 ||  read_size != ret)
 			return ret;
 		
 		if ( XAR(x)->toc_hash_ctx )

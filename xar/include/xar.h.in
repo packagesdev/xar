@@ -64,9 +64,10 @@ typedef struct xar_header xar_header_t;
 #define XAR_HEADER_MAGIC 0x78617221
 #define XAR_EA_FORK "ea"
 
+/* NONE is not supported for security reasons, and may not be supported by all implementations */
 #define XAR_CKSUM_NONE   0
 #define XAR_CKSUM_SHA1   1
-/* MD5 is not recommended for security reasons, and may not be supported by all implementations */
+/* MD5 is not supported for security reasons, and may not be supported by all implementations */
 #define XAR_CKSUM_MD5    2
 #define XAR_CKSUM_SHA256 3
 #define XAR_CKSUM_SHA512 4
@@ -149,9 +150,12 @@ typedef void (*xar_progress_callback)(xar_t x, xar_file_t f, size_t sizeread);
 #define XAR_ERR_ARCHIVE_EXTRACTION 2
 
 xar_t xar_open(const char *file, int32_t flags);
+xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len);
 int xar_close(xar_t x);
-xar_file_t xar_add(xar_t x, const char *path);
 
+xar_header_t xar_header_get(xar_t x);
+
+xar_file_t xar_add(xar_t x, const char *path);
 xar_file_t xar_add_frombuffer(xar_t x, xar_file_t parent, const char *name, char *buffer, size_t length);
 xar_file_t xar_add_folder(xar_t x, xar_file_t f, const char *name, struct stat *info);
 xar_file_t xar_add_frompath(xar_t x, xar_file_t parent, const char *name, const char *realpath);
@@ -168,6 +172,13 @@ int32_t xar_extract_tostream_end(xar_stream *stream);
 
 int32_t xar_verify(xar_t x, xar_file_t f);
 int32_t xar_verify_progress(xar_t x, xar_file_t f, xar_progress_callback progress);
+
+/* To get the checksum of the table of contents use this function.
+ * The function returns a alloced buffer that caller must free. */
+void* xar_get_toc_checksum(xar_t x, size_t* buffer_size);
+
+/* Returns XAR_CKSUM_* that maps to the type of the checksum. */
+int32_t xar_get_toc_checksum_type(xar_t x);
 
 const char *xar_opt_get(xar_t x, const char *option);
 int32_t xar_opt_set(xar_t x, const char *option, const char *value);
