@@ -111,6 +111,7 @@ static xar_t xar_new() {
 		free((void *)ret);
 		return NULL;
 	}
+	XAR(ret)->fd = -1;
 	XAR(ret)->offset = 0;
 
 	XAR(ret)->zs.zalloc = Z_NULL;
@@ -219,32 +220,21 @@ xar_t xar_open(const char *file, int32_t flags)
  * file descriptor to the target xar file.  If the xarchive is opened
  * for writing, the file is created, and a heap file is opened.
  */
-xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len)
+static xar_t
+_xar_open_digest_verify_impl(xar_t xar, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len)
 {
-	xar_t ret;
-
-	ret = xar_new();
-	if( !ret ) return NULL;
-	if( !file )
-		file = "-";
-	XAR(ret)->filename = strdup(file);
+	xar_t ret = xar;
+	
 	if( flags ) { // writing
 		char *tmp1, *tmp2, *tmp4;
-		tmp1 = tmp2 = strdup(file);
+		tmp1 = tmp2 = strdup(xar->filename);
 		XAR(ret)->dirname = xar_safe_dirname(tmp2);
 		/* Create the heap file in the directory which will contain
 		 * the target archive.  /tmp or elsewhere may fill up.
 		 */
 		asprintf(&tmp4, "%s/xar.heap.XXXXXX", XAR(ret)->dirname);
 		free(tmp1);
-		if( strcmp(file, "-") == 0 )
-			XAR(ret)->fd = 1;
-		else{
-			XAR(ret)->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC | O_EXLOCK, 0644);
-			if( (-1 == XAR(ret)->fd ) && (ENOTSUP == errno) ){
-				XAR(ret)->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC , 0644);				
-			}
-		}
+		
 		XAR(ret)->heap_fd = mkstemp(tmp4);
 		if( XAR(ret)->heap_fd < 0 ) {
 			close(XAR(ret)->fd);
@@ -254,14 +244,14 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 		
 		unlink(tmp4);
 		free(tmp4);
-
+		
 		deflateInit(&XAR(ret)->zs, Z_BEST_COMPRESSION);
-
+		
 		if( XAR(ret)->fd < 0 ) {
 			xar_close(ret);
 			return NULL;
 		}
-
+		
 		/* default to using sha1, if nothing else is
 		 * specified.
 		 */
@@ -272,68 +262,61 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 		xar_opt_set(ret, XAR_OPT_FILECKSUM, XAR_OPT_VAL_SHA1);
 		xar_opt_set(ret, XAR_OPT_TOCCKSUM, XAR_OPT_VAL_SHA1);
 	} else {
-		if( strcmp(file, "-") == 0 )
-			XAR(ret)->fd = 0;
-		else{
-			XAR(ret)->fd = open(file, O_RDONLY | O_SHLOCK);
-			
-			if( (-1 == XAR(ret)->fd ) && (ENOTSUP == errno) ){
-				XAR(ret)->fd = open(file, O_RDONLY);
-			}
-
-		}
+		
 		XAR(ret)->heap_fd = -1;
 		inflateInit(&XAR(ret)->zs);
+		
 		if( XAR(ret)->fd < 0 ) {
 			xar_close(ret);
 			return NULL;
 		}
-
+		
+		
 		if( xar_parse_header(ret) != 0 ) {
 			xar_close(ret);
 			return NULL;
 		}
-
+		
 		switch(XAR(ret)->header.cksum_alg) {
-		case XAR_CKSUM_NONE:
-			fprintf(stderr, "Archive uses no hashing algorithm, aborting\n");
-			xar_close(ret);
-			return NULL;
-			break;
-		case XAR_CKSUM_SHA1:
-			XAR(ret)->toc_hash_ctx = xar_hash_new("sha1", (void *)ret);
-			break;
-		case XAR_CKSUM_SHA256:
-			XAR(ret)->toc_hash_ctx = xar_hash_new("sha256", (void *)ret);
-			break;
-		case XAR_CKSUM_SHA512:
-			XAR(ret)->toc_hash_ctx = xar_hash_new("sha512", (void *)ret);
-			break;
-		case XAR_CKSUM_MD5:
+			case XAR_CKSUM_NONE:
+				fprintf(stderr, "Archive uses no hashing algorithm, aborting\n");
+				xar_close(ret);
+				return NULL;
+				break;
+			case XAR_CKSUM_SHA1:
+				XAR(ret)->toc_hash_ctx = xar_hash_new("sha1", (void *)ret);
+				break;
+			case XAR_CKSUM_SHA256:
+				XAR(ret)->toc_hash_ctx = xar_hash_new("sha256", (void *)ret);
+				break;
+			case XAR_CKSUM_SHA512:
+				XAR(ret)->toc_hash_ctx = xar_hash_new("sha512", (void *)ret);
+				break;
+			case XAR_CKSUM_MD5:
 #ifdef XAR_SUPPORT_MD5
-			XAR(ret)->toc_hash_ctx = xar_hash_new("md5", (void *)ret);
-			break;
+				XAR(ret)->toc_hash_ctx = xar_hash_new("md5", (void *)ret);
+				break;
 #else
-			fprintf(stderr, "Archive uses unsafe hashing algorithm (MD5), aborting\n");
-			xar_close(ret);
-			return NULL;
+				fprintf(stderr, "Archive uses unsafe hashing algorithm (MD5), aborting\n");
+				xar_close(ret);
+				return NULL;
 #endif // XAR_SUPPORT_MD5
-		default:
-			fprintf(stderr, "Unknown hashing algorithm, skipping\n");
-			break;
+			default:
+				fprintf(stderr, "Unknown hashing algorithm, skipping\n");
+				break;
 		};
-
+		
 		// deserialize the TOC
 		if( xar_unserialize(ret) != 0 ) {
 			xar_close(ret);
 			return NULL;
 		}
 
-		/* check for inconsistency between checksum style in header, 
-		 * and the one described in the TOC; otherwise, you can flip 
-		 * the header bit to XAR_CKSUM_NONE, and nothing will ever 
-		 * verify that the TOC matches the checksum stored in the 
-		 * heap, and the signature check will pass on a modified 
+		/* check for inconsistency between checksum style in header,
+		 * and the one described in the TOC; otherwise, you can flip
+		 * the header bit to XAR_CKSUM_NONE, and nothing will ever
+		 * verify that the TOC matches the checksum stored in the
+		 * heap, and the signature check will pass on a modified
 		 * file! <rdar://problem/6134714>
 		 */
 		int cksum_match = 0;
@@ -366,9 +349,9 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 			return NULL;
 		}
 		
-		/* also check for consistency between the checksum style and 
-		 * the existence (or not) of signatures: since the signature 
-		 * is signing the checksum, we must have a checksum to verify 
+		/* also check for consistency between the checksum style and
+		 * the existence (or not) of signatures: since the signature
+		 * is signing the checksum, we must have a checksum to verify
 		 * that the TOC has not been modified <rdar://problem/6134714>
 		 */
 		if( xar_signature_first(ret) != NULL && XAR(ret)->header.cksum_alg == XAR_CKSUM_NONE ) {
@@ -380,19 +363,27 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 		/* If we aren't checksumming the TOC, we're done */
 		if( !XAR(ret)->toc_hash_ctx )
 			return ret;
-        
-        /* if TOC specifies a location for the checksum, make sure that
-         * we read the checksum from there: this is required for an archive
-         * with a signature, because the signature will be checked against
-         * the checksum at the specified location <rdar://problem/7041949>
-         */
+		
+		/* if TOC specifies a location for the checksum, make sure that
+		 * we read the checksum from there: this is required for an archive
+		 * with a signature, because the signature will be checked against
+		 * the checksum at the specified location <rdar://problem/7041949>
+		 */
 		const char *value;
 		uint64_t offset = 0;
 		uint64_t length = 0;
 		if( xar_prop_get( XAR_FILE(ret) , "checksum/offset", &value) == 0 ) {
-			errno = 0;
-			offset = strtoull( value, (char **)NULL, 10);
-			if( errno != 0 ) {
+			
+			if (value) {
+				errno = 0;
+				offset = strtoull( value, (char **)NULL, 10);
+				if( errno != 0 ) {
+					fprintf(stderr, "checksum/offset missing or invalid!\n");
+					xar_close(ret);
+					return NULL;
+				}
+			} else {
+				fprintf(stderr, "checksum/offset missing or invalid!\n");
 				xar_close(ret);
 				return NULL;
 			}
@@ -402,16 +393,24 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 			xar_close(ret);
 			return NULL;
 		}
-        
+		
 		XAR(ret)->heap_offset = xar_get_heap_offset(ret) + offset;
 		if( lseek(XAR(ret)->fd, XAR(ret)->heap_offset, SEEK_SET) == -1 ) {
 			xar_close(ret);
 			return NULL;
 		}
 		if( xar_prop_get( XAR_FILE(ret) , "checksum/size", &value) == 0 ) {
-			errno = 0;
-			length = strtoull( value, (char **)NULL, 10);
-			if( errno != 0 ) {
+			
+			if (value) {
+				errno = 0;
+				length = strtoull( value, (char **)NULL, 10);
+				if( errno != 0 ) {
+					fprintf(stderr, "checksum/size missing or invalid!\n");
+					xar_close(ret);
+					return NULL;
+				}
+			} else {
+				fprintf(stderr, "checksum/size missing or invalid!\n");
 				xar_close(ret);
 				return NULL;
 			}
@@ -422,6 +421,7 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 		
 		size_t tlen = 0;
 		void *toccksum = xar_hash_finish(XAR(ret)->toc_hash_ctx, &tlen);
+		XAR(ret)->toc_hash_ctx = NULL;
 		
 		if( length != tlen ) {
 			free(toccksum);
@@ -465,13 +465,13 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 	
 	if ( expected_toc_digest )
 	{
-		if ( ! XAR(ret)->toc_hash_ctx )
+		if ( ! XAR(ret)->toc_hash )
 		{
-			fprintf(stderr, "xar_open_digest_verify: xar lacks a toc_hash_ctx.\n");
+			fprintf(stderr, "xar_open_digest_verify: xar lacks a toc_hash.\n");
 			xar_close(ret);
 			return NULL;
 		}
-			
+		
 		if ( XAR(ret)->toc_hash_size != expected_toc_digest_len )
 		{
 			fprintf(stderr, "xar_open_digest_verify: toc digest length does not match the expected digest length.\n");
@@ -486,8 +486,86 @@ xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc
 			return NULL;
 		}
 	}
-
+	
 	return ret;
+}
+
+xar_t xar_fdopen_digest_verify(int fd, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len)
+{
+	// Dup the descriptor vended to us so that we don't take ownership
+	int new_fd = dup(fd);
+	fd = new_fd;
+	
+	if (fd < 0) {
+		return NULL;
+	}
+	
+	// xar requires the path to the file, so we'll grab a random path
+	// If there are hardlinks, the path we pick is the most recently opened by
+	// the filesystem; which is effectively random.
+	char path_buff[PATH_MAX];
+	if (fcntl(fd, F_GETPATH, path_buff) < 0) {
+		close(fd);
+		return NULL;
+	}
+	
+	// Don't trust the position of the descriptor we were given, reset it back to 0
+	if (lseek(fd, 0, SEEK_SET) != 0) {
+		close(fd);
+		return NULL;
+	}
+	
+	// Writing
+	if (flags) {
+		// Ensure the file is empty before writing
+		if (ftruncate(fd, 0) != 0) {
+			close(fd);
+			return NULL;
+		}
+	}
+	
+	xar_t xar = xar_new();
+	if( !xar ) {
+		close(fd);
+		return NULL;
+	}
+	
+	XAR(xar)->fd = fd;
+	XAR(xar)->filename = strdup(path_buff);
+	return _xar_open_digest_verify_impl(xar, flags, expected_toc_digest, expected_toc_digest_len);
+}
+
+
+xar_t xar_open_digest_verify(const char *file, int32_t flags, void *expected_toc_digest, size_t expected_toc_digest_len)
+{
+	xar_t xar = xar_new();
+	if( !xar ) return NULL;
+	if( !file )
+		file = "-";
+	XAR(xar)->filename = strdup(file);
+	
+	if (flags) {
+		if( strcmp(file, "-") == 0 )
+			XAR(xar)->fd = 1;
+		else{
+			XAR(xar)->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC | O_EXLOCK, 0644);
+			if( (-1 == XAR(xar)->fd ) && (ENOTSUP == errno) ){
+				XAR(xar)->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC , 0644);
+			}
+		}
+	} else {
+		if( strcmp(file, "-") == 0 )
+			XAR(xar)->fd = 0;
+		else{
+			XAR(xar)->fd = open(file, O_RDONLY | O_SHLOCK);
+			
+			if( (-1 == XAR(xar)->fd ) && (ENOTSUP == errno) ){
+				XAR(xar)->fd = open(file, O_RDONLY);
+			}
+		}
+	}
+	
+	return _xar_open_digest_verify_impl(xar, flags, expected_toc_digest, expected_toc_digest_len);
 }
 
 void* xar_get_toc_checksum(xar_t x, size_t* buffer_size)
@@ -731,6 +809,8 @@ int xar_close(xar_t x) {
 		if( XAR(x)->toc_hash_ctx ) {
 			size_t chklen = 0;
 			void *chkstr = xar_hash_finish(XAR(x)->toc_hash_ctx, &chklen);
+			XAR(x)->toc_hash_ctx = NULL;
+			
 			write(XAR(x)->fd, chkstr, chklen);
 
 			/* If there are any signatures, get the signed data a sign it */
@@ -835,6 +915,13 @@ CLOSE_BAIL:
 	free((char *)XAR(x)->dirname);
 	free(XAR(x)->readbuf);
 	free(XAR(x)->toc_hash);
+	if (XAR(x)->toc_hash_ctx) {
+		size_t bytes = 0;
+		char* buffer = xar_hash_finish(XAR(x)->toc_hash_ctx, &bytes);
+		if (buffer) {
+			free(buffer);
+		}
+	}
 	free((void *)x);
 
 	return retval;
@@ -957,7 +1044,7 @@ static xar_file_t xar_add_node(xar_t x, xar_file_t f, const char *name, const ch
 			return NULL;
 		}
 
-		ret = xar_file_new(NULL);
+		ret = xar_file_new(name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -993,7 +1080,7 @@ static xar_file_t xar_add_node(xar_t x, xar_file_t f, const char *name, const ch
 			return NULL;
 		}
 
-		ret = xar_file_new(f);
+		ret = xar_file_new_from_parent(f, name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -1001,8 +1088,6 @@ static xar_file_t xar_add_node(xar_t x, xar_file_t f, const char *name, const ch
 		xar_attr_set(ret, NULL, "id", idstr);
 		XAR_FILE(ret)->fspath = tmp;
 	}
-
-	xar_prop_set(ret, "name", name);
 
 	if( xar_arcmod_archive(x, ret, XAR_FILE(ret)->fspath, NULL, 0) < 0 ) {
 		xar_file_t i = NULL;
@@ -1048,7 +1133,7 @@ static xar_file_t xar_add_pseudodir(xar_t x, xar_file_t f, const char *name, con
 			return NULL;
 		}
 
-		ret = xar_file_new(NULL);
+		ret = xar_file_new(name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -1084,7 +1169,7 @@ static xar_file_t xar_add_pseudodir(xar_t x, xar_file_t f, const char *name, con
 			return NULL;
 		}
 
-		ret = xar_file_new(f);
+		ret = xar_file_new_from_parent(f, name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -1092,7 +1177,6 @@ static xar_file_t xar_add_pseudodir(xar_t x, xar_file_t f, const char *name, con
 		xar_attr_set(ret, NULL, "id", idstr);
 		XAR_FILE(ret)->fspath = tmp;
 	}
-	xar_prop_set(ret, "name", name);
 	xar_prop_set(ret, "type", "directory");
 
 	return ret;
@@ -1156,7 +1240,7 @@ static xar_file_t xar_add_r(xar_t x, xar_file_t f, const char *path, const char 
 	for( i = start; i; i = XAR_FILE(i)->next ) {
 		const char *n;
 		xar_prop_get(i, "name", &n);
-		if( strcmp(n, tmp3) == 0 ) {
+		if(n && strcmp(n, tmp3) == 0 ) {
 			if( !tmp2 ) {
 				/* Node already exists, and it is i */
 				free(tmp1);
@@ -1237,7 +1321,7 @@ xar_file_t xar_add_frombuffer(xar_t x, xar_file_t parent, const char *name, char
 	char idstr[32];
 	
 	if( !parent ) {
-		ret = xar_file_new(NULL);
+		ret = xar_file_new(name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -1251,7 +1335,7 @@ xar_file_t xar_add_frombuffer(xar_t x, xar_file_t parent, const char *name, char
 			XAR(x)->files = ret;
 		}
 	} else {
-		ret = xar_file_new(parent);
+		ret = xar_file_new_from_parent(parent, name);
 		if( !ret )
 			return NULL;
 		memset(idstr, 0, sizeof(idstr));
@@ -1259,10 +1343,8 @@ xar_file_t xar_add_frombuffer(xar_t x, xar_file_t parent, const char *name, char
 		xar_attr_set(ret, NULL, "id", idstr);
 		XAR_FILE(ret)->fspath = NULL;
 	}
-	
-	xar_prop_set(ret, "name", name);
 		
-	//int32_t xar_arcmod_archive(xar_t x, xar_file_t f, const char *file, const char *buffer, size_t len) 
+	//int32_t xar_arcmod_archive(xar_t x, xar_file_t f, const char *file, const char *buffer, size_t len)
 	if( xar_arcmod_archive(x, ret, NULL , buffer , length) < 0 ) {
 		xar_file_t i;
 		if( parent ) {
@@ -1287,7 +1369,7 @@ xar_file_t xar_add_folder(xar_t x, xar_file_t f, const char *name, struct stat *
 	if( info )
 		memcpy(&XAR(x)->sbcache,info,sizeof(struct stat));
 	
-	ret = xar_file_new(f);
+	ret = xar_file_new_from_parent(f, name);
 	if( !ret )
 		return NULL;
 	
@@ -1306,8 +1388,6 @@ xar_file_t xar_add_folder(xar_t x, xar_file_t f, const char *name, struct stat *
 			XAR(x)->files = ret;
 		}
 	}
-	
-	xar_prop_set(ret, "name", name);
 
 	if( xar_arcmod_archive(x, ret, XAR_FILE(ret)->fspath, NULL, 0) < 0 ) {
 		xar_file_t i;
@@ -1420,8 +1500,8 @@ int32_t xar_extract_tobuffersz(xar_t x, xar_file_t f, char **buffer, size_t *siz
 	const char *sizestring = NULL;
 	int32_t ret;
 	
-	if(0 != xar_prop_get(f,"data/size",&sizestring)){
-		if(0 != xar_prop_get(f, "type", &sizestring))
+	if(0 != xar_prop_get_expect_notnull(f,"data/size",&sizestring)){
+		if(0 != xar_prop_get_expect_notnull(f, "type", &sizestring))
 			return -1;
 		if(strcmp(sizestring, "file") == 0) {
 			*size = 0;
@@ -1486,27 +1566,34 @@ int32_t xar_extract(xar_t x, xar_file_t f) {
 	struct stat sb;
 	char *tmp1, *dname;
 	xar_file_t tmpf;
+	uint32_t result = -1;
 	
 	if( (strstr(XAR_FILE(f)->fspath, "/") != NULL) && (stat(XAR_FILE(f)->fspath, &sb)) && (XAR_FILE(f)->parent_extracted == 0) ) {
 		tmp1 = strdup(XAR_FILE(f)->fspath);
 		dname = xar_safe_dirname(tmp1);
 		tmpf = xar_file_find(XAR(x)->files, dname);
+		free(dname);
+		free(tmp1);
 		if( !tmpf ) {
 			xar_err_set_string(x, "Unable to find file");
 			xar_err_callback(x, XAR_SEVERITY_NONFATAL, XAR_ERR_ARCHIVE_EXTRACTION);
 			return -1;
 		}
-		free(dname);
-		free(tmp1);
 		XAR_FILE(f)->parent_extracted++;
-		int32_t result = xar_extract(x, tmpf);
+		result = xar_extract(x, tmpf);
 		
 		if (result < 0)
 			return result;
 			
 	}
 	
-	return xar_extract_tofile(x, f, XAR_FILE(f)->fspath);
+	char* safe_path = xar_get_safe_path(f);
+	if (safe_path) {
+		result = xar_extract_tofile(x, f, safe_path);
+		free(safe_path);
+	}
+	
+	return result;
 }
 
 int32_t xar_verify_progress(xar_t x, xar_file_t f, xar_progress_callback p) {
@@ -1652,6 +1739,11 @@ static int32_t xar_unserialize(xar_t x) {
 						if( type == XML_READER_TYPE_ELEMENT ) {
 							if(strcmp((const char*)name, "file") == 0) {
 								f = xar_file_unserialize(x, NULL, reader);
+								if (f == NULL)
+								{
+									xmlFreeTextReader(reader);
+									return -1;
+								}
 								XAR_FILE(f)->next = XAR(x)->files;
 								XAR(x)->files = f;
 							} else if( strcmp((const char*)name, "signature") == 0
@@ -1673,7 +1765,10 @@ static int32_t xar_unserialize(xar_t x) {
 									XAR(x)->signatures = sig;
 									
 							} else {
-								xar_prop_unserialize(XAR_FILE(x), NULL, reader);
+								if (xar_prop_unserialize(XAR_FILE(x), NULL, reader) != 0) {
+									xmlFreeTextReader(reader);
+									return -1;
+								}
 							}
 						}
 					}
@@ -1712,7 +1807,10 @@ static int32_t xar_unserialize(xar_t x) {
                         if(a){
                             XAR_SUBDOC(s)->attrs = XAR_ATTR(a);
                         }
-                        xar_subdoc_unserialize(s, reader);
+						if (xar_subdoc_unserialize(s, reader) != 0){
+							xmlFreeTextReader(reader);
+							return -1;
+						}
                     }else{
                         xmlFreeTextReader(reader);
                         return -1;
@@ -1736,4 +1834,9 @@ static int32_t xar_unserialize(xar_t x) {
 		
 	xmlFreeTextReader(reader);
 	return 0;
+}
+
+int xar_get_archive_fd(xar_t x)
+{
+	return XAR(x)->fd;
 }

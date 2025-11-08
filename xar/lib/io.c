@@ -444,12 +444,10 @@ int32_t xar_attrcopy_to_heap(xar_t x, xar_file_t f, xar_prop_t p, read_callback 
 int32_t xar_attrcopy_from_heap(xar_t x, xar_file_t f, xar_prop_t p, write_callback wcb, void *context) {
 	int modulecount = (sizeof(xar_datamods)/sizeof(struct datamod));
 	void	*modulecontext[modulecount];
-	int r, i;
+	size_t r, i;
 	size_t bsize, def_bsize;
 	int64_t fsize, inc = 0, seekoff, readsofar = 0;
 	void *inbuf;
-	const char *opt;
-	xar_prop_t tmpp;
 
 	memset(modulecontext, 0, sizeof(void*)*modulecount);
 
@@ -733,7 +731,7 @@ int32_t xar_attrcopy_from_heap_to_stream_init(xar_t x, xar_file_t f, xar_prop_t 
 int32_t xar_attrcopy_from_heap_to_stream(xar_stream *stream) {
 	xar_stream_state_t *state = stream->state;
 
-	int r, i;
+	size_t r, i;
 	size_t bsize;
 	void *inbuf; 
 
@@ -868,8 +866,6 @@ ssize_t xar_pwrite_block(int fd, const void *buf, size_t nbyte, off_t offset)
  */
 int32_t xar_heap_to_archive(xar_t x) {
 	const long bsize = xar_io_get_rsize(x);
-	char *b = malloc(bsize);
-	if( !b ) return -1;
 
 	const ssize_t dst_heap_start_offset = lseek(XAR(x)->fd, 0, SEEK_CUR);
 	if ( dst_heap_start_offset < 0 ) {
@@ -880,6 +876,9 @@ int32_t xar_heap_to_archive(xar_t x) {
 	if ( src_heap_size < 0 ) {
 		return -1;
 	}
+	
+	char *b = malloc(bsize);
+	if( !b ) return -1;
 		
 	// Let's set our offset to the end of the XAR file (end of dst heap)
 	ssize_t src_heap_offset = src_heap_size;
